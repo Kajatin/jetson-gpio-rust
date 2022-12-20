@@ -5,6 +5,12 @@ authors = ["Roland Kajatin roland.kajatin@gmail.com"]
 edition = "2021"
 description = "A Rust port of NVIDIA's Python library for controlling GPIO pins on select Jetson devices"
 repository = "https://github.com/Kajatin/jetson-gpio-rust"
+license = "MIT"
+license-file = "LICENSE.md"
+keywords = ["gpio", "jetson", "nvidia"]
+categories = ["embedded", "hardware-support"]
+#exclude = []
+#include = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
