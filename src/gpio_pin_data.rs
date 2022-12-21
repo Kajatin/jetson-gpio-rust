@@ -1,5 +1,11 @@
 use anyhow::Result;
-use std::{collections::HashMap, env, fs::{File, self}, io::Read, path::Path};
+use std::{
+    collections::HashMap,
+    env,
+    fs::{self, File},
+    io::Read,
+    path::Path,
+};
 
 static CLARA_AGX_XAVIER: &str = "CLARA_AGX_XAVIER";
 static JETSON_NX: &str = "JETSON_NX";
@@ -56,18 +62,19 @@ struct PinDefinition {
 /// - Linux GPIO pin number (within chip, not global)
 /// - Global Linux GPIO pin number
 /// - Global Linux exported GPIO name
-struct ChannelInfo {
+#[derive(Debug)]
+pub struct ChannelInfo {
     channel: u32,
     gpio_chip_dir: String,
-    chip_gpio: String,
     gpio: HashMap<u32, u32>,
-    gpio_name: u32,
-    pwm_chip_dir: String,
-    pwm_id: String,
+    global_gpio: u32,
+    global_gpio_name: String,
+    pwm_chip_dir: Option<String>,
+    pwm_id: Option<u32>,
 }
 
 #[derive(Debug)]
-struct JetsonInfo {
+pub struct JetsonInfo {
     p1_revision: u32,
     ram: String,
     revision: String,
@@ -142,8 +149,7 @@ fn warn_if_not_carrier_board(carrier_boards: &[&str]) {
 }
 
 pub fn get_model() -> Result<String> {
-    // let compatible_path = "/proc/device-tree/compatible";
-    let compatible_path = "/Users/kajatin/Developer/jetson-gpio-rust/compatible";
+    let compatible_path = "/proc/device-tree/compatible";
 
     let compats_jetson_orins = [
         "nvidia,p3737-0000+p3701-0000",
@@ -195,8 +201,6 @@ pub fn get_model() -> Result<String> {
         for c in contents.split('\x00') {
             compats.push(c);
         }
-
-        println!("{:?}", compats);
 
         fn matches(vals: &[&str], compats: &Vec<&str>) -> bool {
             for v in vals {
@@ -884,7 +888,11 @@ fn get_jetson_info(model: &str) -> Result<JetsonInfo, anyhow::Error> {
     anyhow::bail!("No info found for model {}", model)
 }
 
-pub fn get_data() {
+pub fn get_data() -> (
+    String,
+    JetsonInfo,
+    HashMap<String, HashMap<u32, ChannelInfo>>,
+) {
     let model = get_model().unwrap();
 
     let pin_defs: Vec<PinDefinition> = get_pin_defs(model.as_str()).unwrap();
@@ -945,7 +953,10 @@ pub fn get_data() {
 
     let mut pwm_chip_names: Vec<String> = Vec::new();
     for pin_def in pin_defs.iter() {
-        if pin_def.pwm_chip_sysfs.is_some() && !pwm_chip_names.contains(&pin_def.pwm_chip_sysfs.as_ref().unwrap()) && !pin_def.pwm_chip_sysfs.as_ref().unwrap().is_empty() {
+        if pin_def.pwm_chip_sysfs.is_some()
+            && !pwm_chip_names.contains(&pin_def.pwm_chip_sysfs.as_ref().unwrap())
+            && !pin_def.pwm_chip_sysfs.as_ref().unwrap().is_empty()
+        {
             pwm_chip_names.push(pin_def.pwm_chip_sysfs.as_ref().unwrap().clone());
         }
     }
@@ -989,32 +1000,49 @@ pub fn get_data() {
         }
     }
 
-    println!("gpio_chip_dirs: {:?}", gpio_chip_dirs);
-    println!("gpio_chip_base: {:?}", gpio_chip_base);
-    println!("gpio_chip_ngpio: {:?}", gpio_chip_ngpio);
-    println!("pwm_dirs: {:?}", pwm_dirs);
-
     // create a hashmap of channel info, mapping each GPIO pin to a ChannelInfo struct
-    // let mut channel_data: HashMap<u32, ChannelInfo> = HashMap::new();
-    // for pin_def in pin_defs.iter() {
-    //     let ngpio = gpio_chip_ngpio.get(&pin_def.chip_sysfs).unwrap();
-    //     let chip_relative_id = pin_def.gpio.get(ngpio).unwrap();
-    //     let gpio = gpio_chip_base.get(&pin_def.chip_sysfs).unwrap() + chip_relative_id;
-    //     let default_gpio_name = format!("gpio{}", gpio);
-    //     let gpio_name = pin_def.name.get(ngpio).unwrap_or(&default_gpio_name);
+    let mut board_data: HashMap<u32, ChannelInfo> = HashMap::new();
+    let mut bcm_data: HashMap<u32, ChannelInfo> = HashMap::new();
+    for pin_def in pin_defs.iter() {
+        let ngpio = gpio_chip_ngpio.get(&pin_def.chip_sysfs).unwrap();
+        let chip_relative_id = pin_def.gpio.get(ngpio).unwrap();
+        let gpio = gpio_chip_base.get(&pin_def.chip_sysfs).unwrap() + chip_relative_id;
+        let default_gpio_name = format!("gpio{}", gpio);
+        let gpio_name = pin_def.name.get(ngpio).unwrap_or(&default_gpio_name);
 
-    //     let channel = ChannelInfo {
-    //         channel: pin_def.board,
-    //         _gpio_chip_dir: gpio_chip_dirs.get(&pin_def.chip_sysfs).unwrap().clone(),
-    //         _gpio: pin_def.gpio.clone(),
-    //         global_gpio: gpio,
-    //         global_gpio_name: gpio_name.clone(),
-    //     };
+        let mut pwm_chip_dir: Option<String> = None;
+        if pin_def.pwm_chip_sysfs.is_some() {
+            let pwm_chip_sysfs = pin_def.pwm_chip_sysfs.as_ref().unwrap();
+            pwm_chip_dir = pwm_dirs.get(pwm_chip_sysfs).cloned();
+        }
 
-    //     channel_data.insert(channel.channel, channel);
-    // }
-}
+        let channel_board = ChannelInfo {
+            channel: pin_def.board.clone(),
+            gpio_chip_dir: gpio_chip_dirs.get(&pin_def.chip_sysfs).unwrap().clone(),
+            gpio: pin_def.gpio.clone(),
+            global_gpio: gpio.clone(),
+            global_gpio_name: gpio_name.clone(),
+            pwm_chip_dir: pwm_chip_dir.clone(),
+            pwm_id: pin_def.pwm_id.clone(),
+        };
 
-pub fn main() {
+        let channel_bcm = ChannelInfo {
+            channel: pin_def.bcm.clone(),
+            gpio_chip_dir: gpio_chip_dirs.get(&pin_def.chip_sysfs).unwrap().clone(),
+            gpio: pin_def.gpio.clone(),
+            global_gpio: gpio.clone(),
+            global_gpio_name: gpio_name.clone(),
+            pwm_chip_dir: pwm_chip_dir.clone(),
+            pwm_id: pin_def.pwm_id.clone(),
+        };
 
+        board_data.insert(channel_board.channel, channel_board);
+        bcm_data.insert(channel_bcm.channel, channel_bcm);
+    }
+
+    let mut channel_data: HashMap<String, HashMap<u32, ChannelInfo>> = HashMap::new();
+    channel_data.insert(String::from("BOARD"), board_data);
+    channel_data.insert(String::from("BCM"), bcm_data);
+
+    (model, jetson_info, channel_data)
 }

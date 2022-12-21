@@ -6,15 +6,12 @@ pub fn add(left: usize, right: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::gpio_pin_data::{get_model, get_data};
-
-    use super::*;
+    use crate::gpio_pin_data::get_data;
 
     #[test]
     fn it_works() {
-        let ret = get_model();
+        let ret = get_data();
         println!("ret: {:?}", ret);
-        get_data();
 
         let result: usize = 4;
         assert_eq!(result, 4);
