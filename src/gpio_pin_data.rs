@@ -62,18 +62,18 @@ struct PinDefinition {
 /// - Linux GPIO pin number (within chip, not global)
 /// - Global Linux GPIO pin number
 /// - Global Linux exported GPIO name
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ChannelInfo {
-    channel: u32,
-    gpio_chip_dir: String,
-    gpio: HashMap<u32, u32>,
-    global_gpio: u32,
-    global_gpio_name: String,
-    pwm_chip_dir: Option<String>,
-    pwm_id: Option<u32>,
+    pub channel: u32,
+    pub gpio_chip_dir: String,
+    pub gpio: HashMap<u32, u32>,
+    pub global_gpio: u32,
+    pub global_gpio_name: String,
+    pub pwm_chip_dir: Option<String>,
+    pub pwm_id: Option<u32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JetsonInfo {
     p1_revision: u32,
     ram: String,
