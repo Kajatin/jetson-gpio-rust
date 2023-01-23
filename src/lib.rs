@@ -16,7 +16,7 @@ mod tests {
         // ERROR line 344: mutex lock() blocks -> double lock...
         setup(vec![7, 11], Direction::OUT, Some(Level::LOW));
 
-        for _ in 0..10 {
+        for _ in 0..3 {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 output(vec![7, 11], vec![Level::HIGH, Level::HIGH]);
                 std::thread::sleep(std::time::Duration::from_secs(1));

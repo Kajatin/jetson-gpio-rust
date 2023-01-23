@@ -242,11 +242,14 @@ fn _cleanup_one(ch_info: ChannelInfo) {
 
 fn _cleanup_all() {
     let mut gpio_state = GPIO_STATE.lock().unwrap();
-    for (channel, _) in gpio_state._channel_configuration.iter() {
+    let channel_configuration = gpio_state._channel_configuration.clone();
+    drop(gpio_state);
+    for (channel, _) in channel_configuration.iter() {
         let ch_info = _channel_to_info(*channel, false, false);
         _cleanup_one(ch_info);
     }
 
+    let mut gpio_state = GPIO_STATE.lock().unwrap();
     gpio_state._gpio_mode = None;
 }
 
@@ -342,7 +345,10 @@ pub fn setup(channels: Vec<u32>, direction: Direction, initial: Option<Level>) {
     //                      "PUD_OFF, PUD_UP or PUD_DOWN")
 
     let gpio_state = GPIO_STATE.lock().unwrap();
-    if gpio_state._gpio_warnings {
+    let warnings = gpio_state._gpio_warnings.clone();
+    let channel_configuration = gpio_state._channel_configuration.clone();
+    drop(gpio_state);
+    if warnings {
         for ch_info in ch_infos.clone() {
             let sysfs_cfg = _sysfs_channel_configuration(ch_info.clone());
             let app_cfg = _app_channel_configuration(ch_info);
@@ -358,7 +364,7 @@ pub fn setup(channels: Vec<u32>, direction: Direction, initial: Option<Level>) {
     for ch_info in ch_infos.clone() {
         // if ch_info.channel in _channel_configuration:
         //     _cleanup_one(ch_info)
-        if gpio_state._channel_configuration.contains_key(&ch_info.channel) {
+        if channel_configuration.contains_key(&ch_info.channel) {
             _cleanup_one(ch_info);
         }
     }
@@ -386,9 +392,13 @@ pub fn setup(channels: Vec<u32>, direction: Direction, initial: Option<Level>) {
 // cleaned
 pub fn cleanup(channel: Option<Vec<u32>>) {
     let gpio_state = GPIO_STATE.lock().unwrap();
+    let gpio_mode = gpio_state._gpio_mode.clone();
+    let warnings = gpio_state._gpio_warnings.clone();
+    let channel_configuration = gpio_state._channel_configuration.clone();
+    drop(gpio_state);
     // warn if no channel is setup
-    if gpio_state._gpio_mode.is_none() {
-        if gpio_state._gpio_warnings {
+    if gpio_mode.is_none() {
+        if warnings {
             println!("No channels have been set up yet - nothing to clean up! Try cleaning up at the end of your program instead!");
         }
         return;
@@ -402,7 +412,7 @@ pub fn cleanup(channel: Option<Vec<u32>>) {
 
     let ch_infos = _channels_to_infos(channel.unwrap(), false, false);
     for ch_info in ch_infos {
-        if gpio_state._channel_configuration.contains_key(&ch_info.channel) {
+        if channel_configuration.contains_key(&ch_info.channel) {
             _cleanup_one(ch_info);
         }
     }
