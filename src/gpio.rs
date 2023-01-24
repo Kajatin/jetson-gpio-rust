@@ -1,7 +1,14 @@
-use std::{fs, sync::Mutex, collections::HashMap, path::Path, io::{Write, Seek, Read}, thread, time::Duration};
-use once_cell::sync::Lazy;
+use anyhow::Error;
+use std::{
+    collections::HashMap,
+    fs,
+    io::{Read, Seek, Write},
+    path::Path,
+    thread,
+    time::Duration,
+};
 
-use crate::gpio_pin_data::{get_data, JetsonInfo, ChannelInfo};
+use crate::gpio_pin_data::{get_data, ChannelInfo, JetsonInfo, Mode};
 
 static SYSFS_ROOT: &str = "/sys/class/gpio";
 
@@ -42,77 +49,17 @@ pub enum Direction {
     HARD_PWM = 43,
 }
 
-struct GpioState {
-    model: String,
-    JETSON_INFO: JetsonInfo,
-    _channel_data_by_mode: HashMap<String, HashMap<u32, ChannelInfo>>,
-
-    // # Dictionary objects used as lookup tables for pin to linux gpio mapping
-    _channel_data: HashMap<u32, ChannelInfo>,
-
-    _gpio_warnings: bool,
-    _gpio_mode: Option<String>,
-    _channel_configuration: HashMap<u32, Direction>,
-}
-
-impl GpioState {
-    fn new() -> Self {
-        let (model, JETSON_INFO, _channel_data_by_mode) = get_data();
-
-        GpioState {
-            model,
-            JETSON_INFO: JETSON_INFO,
-            _channel_data_by_mode,
-
-            _channel_data: HashMap::new(),
-
-            _gpio_warnings: true,
-            _gpio_mode: None,
-            _channel_configuration: HashMap::new(),
+impl Direction {
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Direction::OUT => true,
+            Direction::IN => true,
+            _ => false,
         }
     }
 }
 
-static GPIO_STATE: Lazy<Mutex<GpioState>> = Lazy::new(|| Mutex::new(GpioState::new()));
-
-fn _validate_mode_set() {
-    if GPIO_STATE.lock().unwrap()._gpio_mode.is_none() {
-        panic!("Please set pin numbering mode using GPIO.setmode(GPIO.BOARD), GPIO.setmode(GPIO.BCM), GPIO.setmode(GPIO.TEGRA_SOC) or GPIO.setmode(GPIO.CVM)");
-    }
-}
-
-// Function used to enable/disable warnings during setup and cleanup.
-// Param -> state is a bool
-fn setwarnings(state: bool){
-    GPIO_STATE.lock().unwrap()._gpio_warnings = state;
-}
-
-// Function used to set the pin mumbering mode. Possible mode values are BOARD,
-// BCM, TEGRA_SOC, and CVM
-pub fn setmode(mode: String){
-    let mut gpio_state = GPIO_STATE.lock().unwrap();
-    // check if a different mode has been set
-    if gpio_state._gpio_mode.is_some() && Some(mode.clone()) != gpio_state._gpio_mode{
-        panic!("A different mode has already been set!");
-    }
-
-    // check if mode parameter is valid
-    let accepted_modes = vec!["BOARD", "BCM"];
-    if !accepted_modes.contains(&mode.as_str()) {
-        panic!("An invalid mode was passed to setmode()!");
-    }
-
-    // _channel_data = _channel_data_by_mode[accepted_modes[mode]]
-    gpio_state._channel_data = gpio_state._channel_data_by_mode.get(&mode).unwrap().clone();
-    gpio_state._gpio_mode = Some(mode);
-}
-
-// Function used to get the currently set pin numbering mode
-pub fn getmode() -> Option<String> {
-    GPIO_STATE.lock().unwrap()._gpio_mode.clone()
-}
-
-fn check_write_access() -> bool {
+fn check_write_access() -> Result<(), Error> {
     let export_path = format!("{}/export", SYSFS_ROOT);
     let unexport_path = format!("{}/unexport", SYSFS_ROOT);
 
@@ -122,44 +69,14 @@ fn check_write_access() -> bool {
     let export_permissions = export_metadata.permissions();
     let unexport_permissions = unexport_metadata.permissions();
 
-    !export_permissions.readonly() && !unexport_permissions.readonly()
+    if !export_permissions.readonly() && !unexport_permissions.readonly() {
+        Ok(())
+    } else {
+        Err(Error::msg("You do not have write access to the GPIO sysfs interface."))
+    }
 }
 
-fn _channel_to_info_lookup(channel: u32, need_gpio: bool, need_pwm: bool) -> ChannelInfo {
-    let gpio_state = GPIO_STATE.lock().unwrap();
-    if !gpio_state._channel_data.contains_key(&channel) {
-        panic!("Channel {} is invalid", channel);
-    }
-
-    let ch_info = gpio_state._channel_data.get(&channel).unwrap().clone();
-
-    if need_gpio && ch_info.gpio_chip_dir == "" {
-        panic!("Channel {} is not a GPIO", channel);
-    }
-
-    if need_pwm && ch_info.pwm_chip_dir.is_none() {
-        panic!("Channel {} is not a PWM", channel);
-    }
-
-    ch_info
-}
-
-fn _channel_to_info(channel: u32, need_gpio: bool, need_pwm: bool) -> ChannelInfo {
-    _validate_mode_set();
-    _channel_to_info_lookup(channel, need_gpio, need_pwm)
-}
-
-fn _channels_to_infos(channels: Vec<u32>, need_gpio: bool, need_pwm: bool) -> Vec<ChannelInfo> {
-    _validate_mode_set();
-    let mut ret: Vec<ChannelInfo> = Vec::new();
-    for channel in channels {
-        ret.push(_channel_to_info_lookup(channel, need_gpio, need_pwm));
-    }
-
-    ret
-}
-
-fn _sysfs_channel_configuration(ch_info: ChannelInfo) -> Option<Direction> {
+fn sysfs_channel_configuration(ch_info: ChannelInfo) -> Option<Direction> {
     // """Return the current configuration of a channel as reported by sysfs. Any
     // of IN, OUT, PWM, or None may be returned."""
 
@@ -185,25 +102,16 @@ fn _sysfs_channel_configuration(ch_info: ChannelInfo) -> Option<Direction> {
     None
 }
 
-
-fn _app_channel_configuration(ch_info: ChannelInfo) -> Option<Direction> {
-    // """Return the current configuration of a channel as requested by this
-    // module in this process. Any of IN, OUT, or None may be returned."""
-
-    match GPIO_STATE.lock().unwrap()._channel_configuration.get(&ch_info.channel) {
-        Some(direction) => Some(direction.clone()),
-        None => None,
-    }
-}
-
-fn _export_gpio(ch_info: ChannelInfo) {
+fn export_gpio(ch_info: ChannelInfo) {
     let gpio_dir = format!("{}/{}", SYSFS_ROOT, ch_info.global_gpio_name);
     if !Path::new(&gpio_dir).exists() {
         let mut f_export = fs::OpenOptions::new()
             .write(true)
             .open(format!("{}/export", SYSFS_ROOT))
             .unwrap();
-        f_export.write_all(ch_info.global_gpio.to_string().as_bytes()).unwrap();
+        f_export
+            .write_all(ch_info.global_gpio.to_string().as_bytes())
+            .unwrap();
     }
 
     while !Path::new(&format!("{}/value", gpio_dir)).exists() {
@@ -211,249 +119,412 @@ fn _export_gpio(ch_info: ChannelInfo) {
     }
 }
 
-fn _unexport_gpio(ch_info: ChannelInfo) {
+fn unexport_gpio(ch_info: ChannelInfo) {
     let gpio_dir = format!("{}/{}", SYSFS_ROOT, ch_info.global_gpio_name);
     if Path::new(&gpio_dir).exists() {
         let mut f_unexport = fs::OpenOptions::new()
             .write(true)
             .open(format!("{}/unexport", SYSFS_ROOT))
             .unwrap();
-        f_unexport.write_all(ch_info.global_gpio.to_string().as_bytes()).unwrap();
+        f_unexport
+            .write_all(ch_info.global_gpio.to_string().as_bytes())
+            .unwrap();
     }
 }
 
-fn _cleanup_one(ch_info: ChannelInfo) {
-    let mut gpio_state = GPIO_STATE.lock().unwrap();
-    match gpio_state._channel_configuration.get(&ch_info.channel) {
-        Some(direction) => {
-            if direction == &Direction::HARD_PWM {
-                // _disable_pwm(ch_info);
-                // _unexport_pwm(ch_info);
-            } else {
-                // event::event_cleanup(ch_info.gpio, ch_info.gpio_name);
-                _unexport_gpio(ch_info.clone());
-            }
-        }
-        None => {}
-    }
-
-    gpio_state._channel_configuration.remove(&ch_info.channel);
-}
-
-fn _cleanup_all() {
-    let mut gpio_state = GPIO_STATE.lock().unwrap();
-    let channel_configuration = gpio_state._channel_configuration.clone();
-    drop(gpio_state);
-    for (channel, _) in channel_configuration.iter() {
-        let ch_info = _channel_to_info(*channel, false, false);
-        _cleanup_one(ch_info);
-    }
-
-    let mut gpio_state = GPIO_STATE.lock().unwrap();
-    gpio_state._gpio_mode = None;
-}
-
-fn _write_direction(ch_info: ChannelInfo, direction: String) {
+fn write_direction(ch_info: ChannelInfo, direction: String) {
     let gpio_dir = format!("{}/{}/direction", SYSFS_ROOT, ch_info.global_gpio_name);
-    let mut f_direction = fs::OpenOptions::new()
-        .write(true)
-        .open(gpio_dir)
-        .unwrap();
+    let mut f_direction = fs::OpenOptions::new().write(true).open(gpio_dir).unwrap();
     f_direction.rewind().unwrap();
     f_direction.write_all(direction.as_bytes()).unwrap();
 }
 
-fn _write_value(ch_info: ChannelInfo, value: String) {
+fn write_value(ch_info: ChannelInfo, value: String) {
     let gpio_dir = format!("{}/{}/value", SYSFS_ROOT, ch_info.global_gpio_name);
-    let mut f_direction = fs::OpenOptions::new()
-        .write(true)
-        .open(gpio_dir)
-        .unwrap();
+    let mut f_direction = fs::OpenOptions::new().write(true).open(gpio_dir).unwrap();
     f_direction.rewind().unwrap();
     f_direction.write_all(value.as_bytes()).unwrap();
 }
 
-fn _read_value(ch_info: ChannelInfo) -> String {
+fn read_value(ch_info: ChannelInfo) -> String {
     let gpio_dir = format!("{}/{}/value", SYSFS_ROOT, ch_info.global_gpio_name);
-    let mut f_direction = fs::OpenOptions::new()
-        .read(true)
-        .open(gpio_dir)
-        .unwrap();
+    let mut f_direction = fs::OpenOptions::new().read(true).open(gpio_dir).unwrap();
     let mut value = String::new();
     f_direction.rewind().unwrap();
     f_direction.read_to_string(&mut value).unwrap();
     value
 }
 
-fn _output_one(ch_info: ChannelInfo, value: Level) {
+fn output_one(ch_info: ChannelInfo, value: Level) {
     let value_str = match value {
         Level::HIGH => "1",
         Level::LOW => "0",
     };
 
-    _write_value(ch_info, value_str.to_string());
+    write_value(ch_info, value_str.to_string());
 }
 
-fn _setup_single_out(ch_info: ChannelInfo, initial: Option<Level>) {
-    _export_gpio(ch_info.clone());
-    _write_direction(ch_info.clone(), "out".to_string());
+pub struct GPIO {
+    model: String,
+    jetson_info: JetsonInfo,
+    channel_data_by_mode: HashMap<Mode, HashMap<u32, ChannelInfo>>,
 
-    if initial.is_some() {
-        _output_one(ch_info.clone(), initial.unwrap());
-    }
+    // # Dictionary objects used as lookup tables for pin to linux gpio mapping
+    channel_data: HashMap<u32, ChannelInfo>,
 
-    GPIO_STATE.lock().unwrap()._channel_configuration.insert(ch_info.channel, Direction::OUT);
+    gpio_warnings: bool,
+    gpio_mode: Option<Mode>,
+    channel_configuration: HashMap<u32, Direction>,
 }
 
-fn _setup_single_in(ch_info: ChannelInfo) {
-    _export_gpio(ch_info.clone());
-    _write_direction(ch_info.clone(), "in".to_string());
+impl GPIO {
+    /// Creates a new `GPIO` object.
+    pub fn new() -> Self {
+        let (model, jetson_info, channel_data_by_mode) = get_data();
 
-    GPIO_STATE.lock().unwrap()._channel_configuration.insert(ch_info.channel, Direction::IN);
-}
+        GPIO {
+            model,
+            jetson_info,
+            channel_data_by_mode,
 
-pub fn setup(channels: Vec<u32>, direction: Direction, initial: Option<Level>) {
-    if !check_write_access() {
-        panic!("The current user does not have permissions set to access the library functionalities. Please configure permissions or use the root user to run this");
-    } else {
-        println!("The current user has permissions set to access the library functionalities.");
+            channel_data: HashMap::new(),
+
+            gpio_warnings: true,
+            gpio_mode: None,
+            channel_configuration: HashMap::new(),
+        }
     }
 
-    // if pull_up_down in setup.__defaults__:
-    //     pull_up_down_explicit = False
-    //     pull_up_down = pull_up_down.val
-    // else:
-    //     pull_up_down_explicit = True
-
-    let ch_infos = _channels_to_infos(channels, true, false);
-
-    // check direction is valid
-    if direction != Direction::OUT && direction != Direction::IN {
-        panic!("An invalid direction was passed to setup()");
+    /// Enable or disable warnings during setup and cleanup.
+    ///
+    /// # Arguments
+    ///
+    /// * `warnings` - `true` to enable warnings, `false` to disable warnings
+    pub fn setwarnings(&mut self, warnings: bool) {
+        self.gpio_warnings = warnings;
     }
 
-    // // check if pullup/down is used with output
-    // if direction == OUT and pull_up_down != PUD_OFF:
-    //     raise ValueError("pull_up_down parameter is not valid for outputs")
-
-    // // check if pullup/down value is specified and/or valid
-    // if pull_up_down_explicit:
-    //     warnings.warn("Jetson.GPIO ignores setup()'s pull_up_down parameter")
-    // if (pull_up_down != PUD_OFF and pull_up_down != PUD_UP and
-    //         pull_up_down != PUD_DOWN):
-    //     raise ValueError("Invalid value for pull_up_down; should be one of"
-    //                      "PUD_OFF, PUD_UP or PUD_DOWN")
-
-    let gpio_state = GPIO_STATE.lock().unwrap();
-    let warnings = gpio_state._gpio_warnings.clone();
-    let channel_configuration = gpio_state._channel_configuration.clone();
-    drop(gpio_state);
-    if warnings {
-        for ch_info in ch_infos.clone() {
-            let sysfs_cfg = _sysfs_channel_configuration(ch_info.clone());
-            let app_cfg = _app_channel_configuration(ch_info);
-
-            // warn if channel has been setup external to current program
-            if app_cfg.is_none() && sysfs_cfg.is_some() {
-                println!("This channel is already in use, continuing anyway. Use GPIO.setwarnings(False) to disable warnings");
+    /// Sets the pin mumbering mode.
+    ///
+    /// Possible mode values are
+    /// * BOARD
+    /// * BCM
+    /// * TEGRA_SOC
+    /// * CVM
+    pub fn setmode(&mut self, mode: Mode) -> Result<(), Error> {
+        // check if a different mode has been set already
+        if let Some(current_mode) = self.gpio_mode {
+            if current_mode != mode {
+                return Err(Error::msg("A different mode has already been set!"));
             }
         }
+
+        // check if mode parameter is valid
+        if !mode.is_valid() {
+            return Err(Error::msg("An invalid mode was passed to setmode!"));
+        }
+
+        self.channel_data = self.channel_data_by_mode.get(&mode).unwrap().clone();
+        self.gpio_mode = Some(mode);
+
+        Ok(())
     }
 
-    // cleanup if the channel is already setup
-    for ch_info in ch_infos.clone() {
-        // if ch_info.channel in _channel_configuration:
-        //     _cleanup_one(ch_info)
-        if channel_configuration.contains_key(&ch_info.channel) {
-            _cleanup_one(ch_info);
+    /// Returns the currently set pin numbering mode as a `Option<String>`.
+    pub fn getmode(&self) -> Option<String> {
+        match self.gpio_mode {
+            Some(mode) => Some(String::from(mode.to_str())),
+            None => None,
         }
     }
 
-    match direction {
-        Direction::OUT => {
+    fn validate_mode_set(&self) -> Result<(), Error> {
+        match self.gpio_mode {
+            Some(_) => Ok(()),
+            None => Err(Error::msg("Please set pin numbering mode using GPIO.setmode(Mode::BOARD), GPIO.setmode(Mode::BCM), GPIO.setmode(Mode::TEGRA_SOC) or GPIO.setmode(Mode::CVM)")),
+        }
+    }
+
+    fn channel_to_info_lookup(
+        &self,
+        channel: u32,
+        need_gpio: bool,
+        need_pwm: bool,
+    ) -> Result<ChannelInfo, Error> {
+        if !self.channel_data.contains_key(&channel) {
+            return Err(Error::msg(format!(
+                "The channel sent is invalid: {}",
+                channel
+            )));
+        }
+
+        let ch_info = self.channel_data.get(&channel).unwrap().clone();
+
+        if need_gpio && ch_info.gpio_chip_dir == "" {
+            return Err(Error::msg(format!("Channel {} is not a GPIO", channel)));
+        }
+
+        if need_pwm && ch_info.pwm_chip_dir.is_none() {
+            return Err(Error::msg(format!("Channel {} is not a PWM", channel)));
+        }
+
+        Ok(ch_info)
+    }
+
+    fn channel_to_info(
+        &self,
+        channel: u32,
+        need_gpio: bool,
+        need_pwm: bool,
+    ) -> Result<ChannelInfo, Error> {
+        self.validate_mode_set()?;
+        self.channel_to_info_lookup(channel, need_gpio, need_pwm)
+    }
+
+    fn channels_to_infos(
+        &self,
+        channels: Vec<u32>,
+        need_gpio: bool,
+        need_pwm: bool,
+    ) -> Result<Vec<ChannelInfo>, Error> {
+        self.validate_mode_set()?;
+        let mut ret: Vec<ChannelInfo> = Vec::new();
+        for channel in channels {
+            ret.push(self.channel_to_info_lookup(channel, need_gpio, need_pwm)?);
+        }
+
+        Ok(ret)
+    }
+
+    fn app_channel_configuration(&self, ch_info: ChannelInfo) -> Option<Direction> {
+        // """Return the current configuration of a channel as requested by this
+        // module in this process. Any of IN, OUT, or None may be returned."""
+
+        match self.channel_configuration.get(&ch_info.channel) {
+            Some(direction) => Some(direction.clone()),
+            None => None,
+        }
+    }
+
+    fn cleanup_one(&mut self, ch_info: ChannelInfo) {
+        match self.channel_configuration.get(&ch_info.channel) {
+            Some(direction) => {
+                if direction == &Direction::HARD_PWM {
+                    // _disable_pwm(ch_info);
+                    // _unexport_pwm(ch_info);
+                } else {
+                    // event::event_cleanup(ch_info.gpio, ch_info.gpio_name);
+                    unexport_gpio(ch_info.clone());
+                }
+            }
+            None => {}
+        }
+
+        self.channel_configuration.remove(&ch_info.channel);
+    }
+
+    fn cleanup_all(&mut self) -> Result<(), Error> {
+        for (channel, _) in self.channel_configuration.clone().iter() {
+            let ch_info = self.channel_to_info(*channel, false, false)?;
+            self.cleanup_one(ch_info);
+        }
+
+        self.gpio_mode = None;
+
+        Ok(())
+    }
+
+    fn setup_single_out(&mut self, ch_info: ChannelInfo, initial: Option<Level>) {
+        export_gpio(ch_info.clone());
+        write_direction(ch_info.clone(), "out".to_string());
+
+        if initial.is_some() {
+            output_one(ch_info.clone(), initial.unwrap());
+        }
+
+        self.channel_configuration
+            .insert(ch_info.channel, Direction::OUT);
+    }
+
+    fn setup_single_in(&mut self, ch_info: ChannelInfo) {
+        export_gpio(ch_info.clone());
+        write_direction(ch_info.clone(), "in".to_string());
+
+        self.channel_configuration
+            .insert(ch_info.channel, Direction::IN);
+    }
+
+    /// Setup a channel or list of channels with a direction and (optional) pull/up down control and (optional) initial value.
+    ///
+    /// # Arguments
+    ///
+    /// * `channels` - A list of channels to setup.
+    /// * `direction` - IN or OUT
+    /// * `initial` - An optional initial level for an output channel.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use jetson_gpio::{GPIO, Direction, Mode};
+    ///
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::BOARD).unwrap();
+    /// gpio.setup(vec![7], Direction::OUT, None).unwrap();
+    /// ```
+    pub fn setup(&mut self, channels: Vec<u32>, direction: Direction, initial: Option<Level>) -> Result<(), Error> {
+        check_write_access()?;
+
+        // if pull_up_down in setup.__defaults__:
+        //     pull_up_down_explicit = False
+        //     pull_up_down = pull_up_down.val
+        // else:
+        //     pull_up_down_explicit = True
+
+        let ch_infos = self.channels_to_infos(channels, true, false)?;
+
+        // check direction is valid
+        if !direction.is_valid() {
+            return Err(Error::msg("An invalid direction was passed to setup()"));
+        }
+
+        // // check if pullup/down is used with output
+        // if direction == OUT and pull_up_down != PUD_OFF:
+        //     raise ValueError("pull_up_down parameter is not valid for outputs")
+
+        // // check if pullup/down value is specified and/or valid
+        // if pull_up_down_explicit:
+        //     warnings.warn("Jetson.GPIO ignores setup()'s pull_up_down parameter")
+        // if (pull_up_down != PUD_OFF and pull_up_down != PUD_UP and
+        //         pull_up_down != PUD_DOWN):
+        //     raise ValueError("Invalid value for pull_up_down; should be one of"
+        //                      "PUD_OFF, PUD_UP or PUD_DOWN")
+
+        if self.gpio_warnings {
             for ch_info in ch_infos.clone() {
-                _setup_single_out(ch_info, initial.clone());
+                let sysfs_cfg = sysfs_channel_configuration(ch_info.clone());
+                let app_cfg = self.app_channel_configuration(ch_info);
+
+                // warn if channel has been setup external to current program
+                if app_cfg.is_none() && sysfs_cfg.is_some() {
+                    println!("This channel is already in use, continuing anyway. Use GPIO.setwarnings(False) to disable warnings");
+                }
             }
         }
-        _ => {
-            if initial.is_some() {
-                panic!("initial parameter is not valid for inputs");
+
+        // cleanup if the channel is already setup
+        for ch_info in ch_infos.clone() {
+            // if ch_info.channel in channel_configuration:
+            //     cleanup_one(ch_info)
+            if self.channel_configuration.contains_key(&ch_info.channel) {
+                self.cleanup_one(ch_info);
             }
-            for ch_info in ch_infos {
-                _setup_single_in(ch_info);
+        }
+
+        match direction {
+            Direction::OUT => {
+                for ch_info in ch_infos.clone() {
+                    self.setup_single_out(ch_info, initial.clone());
+                }
+            }
+            _ => {
+                if initial.is_some() {
+                    return Err(Error::msg("initial parameter is not valid for inputs"));
+                }
+                for ch_info in ch_infos {
+                    self.setup_single_in(ch_info);
+                }
             }
         }
-    }
-}
 
-// Function used to cleanup channels at the end of the program.
-// The param channel can be an integer or list/tuple of integers specifying the
-// channels to be cleaned up. If no channel is provided, all channels are
-// cleaned
-pub fn cleanup(channel: Option<Vec<u32>>) {
-    let gpio_state = GPIO_STATE.lock().unwrap();
-    let gpio_mode = gpio_state._gpio_mode.clone();
-    let warnings = gpio_state._gpio_warnings.clone();
-    let channel_configuration = gpio_state._channel_configuration.clone();
-    drop(gpio_state);
-    // warn if no channel is setup
-    if gpio_mode.is_none() {
-        if warnings {
-            println!("No channels have been set up yet - nothing to clean up! Try cleaning up at the end of your program instead!");
+        Ok(())
+    }
+
+    /// Cleans up channels at the end of the program.
+    ///
+    /// # Arguments
+    ///
+    /// * `channels` - An optional list of channels to cleanup. If no channel is provided, all channels are cleaned.
+    pub fn cleanup(&mut self, channels: Option<Vec<u32>>) -> Result<(), Error> {
+        // warn if no channel is setup
+        if self.gpio_mode.is_none() {
+            if self.gpio_warnings {
+                println!("No channels have been set up yet - nothing to clean up! Try cleaning up at the end of your program instead!");
+            }
+            return Ok(());
         }
-        return;
-    }
 
-    // clean all channels if no channel param provided
-    if channel.is_none() {
-        _cleanup_all();
-        return;
-    }
-
-    let ch_infos = _channels_to_infos(channel.unwrap(), false, false);
-    for ch_info in ch_infos {
-        if channel_configuration.contains_key(&ch_info.channel) {
-            _cleanup_one(ch_info);
+        // clean all channels if no channel param provided
+        if channels.is_none() {
+            self.cleanup_all()?;
+            return Ok(());
         }
-    }
-}
 
-// Function used to return the current value of the specified channel.
-// Function returns either HIGH or LOW
-pub fn input(channel: u32) -> Level {
-    let ch_info = _channel_to_info(channel, true, false);
+        let ch_infos = self.channels_to_infos(channels.unwrap(), false, false)?;
+        for ch_info in ch_infos {
+            if self.channel_configuration.contains_key(&ch_info.channel) {
+                self.cleanup_one(ch_info);
+            }
+        }
 
-    let app_cfg = _app_channel_configuration(ch_info.clone());
-    if app_cfg.is_none() || ![Direction::IN, Direction::OUT].contains(&app_cfg.unwrap()) {
-        panic!("You must setup() the GPIO channel first");
+        Ok(())
     }
 
-    match _read_value(ch_info).as_str() {
-        "0" => Level::LOW,
-        _ => Level::HIGH,
-    }
-}
+    /// Returns the current value of the specified channel.
+    ///
+    /// Return either HIGH or LOW.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel` - The channel to read from.
+    pub fn input(&self, channel: u32) -> Result<Level, Error> {
+        let ch_info = self.channel_to_info(channel, true, false)?;
 
-// Function used to set a value to a channel or list/tuple of channels.
-// Parameter channels must be an integer or list/tuple of integers.
-// Values must be either HIGH or LOW or list/tuple
-// of HIGH and LOW with the same length as the channels list/tuple
-pub fn output(channels: Vec<u32>, values: Vec<Level>) {
-    let ch_infos = _channels_to_infos(channels, true, false);
+        let app_cfg = self.app_channel_configuration(ch_info.clone());
+        if app_cfg.is_none() || ![Direction::IN, Direction::OUT].contains(&app_cfg.unwrap()) {
+            return Err(Error::msg("You must setup() the GPIO channel first"));
+        }
 
-    if values.len() != ch_infos.len() {
-        panic!("Number of values != number of channels");
-    }
-
-    // check that channels have been set as output
-    for ch_info in ch_infos.clone() {
-        let app_cfg = _app_channel_configuration(ch_info);
-        if app_cfg.is_none() || app_cfg.unwrap() != Direction::OUT {
-            panic!("The GPIO channel has not been set up as an OUTPUT");
+        match read_value(ch_info).as_str() {
+            "0" => Ok(Level::LOW),
+            _ => Ok(Level::HIGH),
         }
     }
 
-    for (ch_info, value) in ch_infos.iter().zip(values.iter()) {
-        _output_one(ch_info.clone(), value.clone());
+    /// Writes a value to channels.
+    ///
+    /// # Arguments
+    ///
+    /// * `channels` - A list of channels to write to.
+    /// * `values` - A list of values to write to the channels. Must be either HIGH or LOW.
+    ///
+    /// # Example
+    /// ```rust
+    /// use jetson_gpio::{GPIO, Direction, Level, Mode};
+    ///
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::BOARD).unwrap();
+    /// gpio.setup(vec![7], Direction::OUT, None).unwrap();
+    /// gpio.output(vec![7], vec![Level::HIGH]).unwrap();
+    /// ```
+    pub fn output(&self, channels: Vec<u32>, values: Vec<Level>) -> Result<(), Error> {
+        let ch_infos = self.channels_to_infos(channels, true, false)?;
+
+        if values.len() != ch_infos.len() {
+            return Err(Error::msg("Number of values != number of channels"));
+        }
+
+        // check that channels have been set as output
+        for ch_info in ch_infos.clone() {
+            let app_cfg = self.app_channel_configuration(ch_info);
+            if app_cfg.is_none() || app_cfg.unwrap() != Direction::OUT {
+                return Err(Error::msg("The GPIO channel has not been set up as an OUTPUT"));
+            }
+        }
+
+        for (ch_info, value) in ch_infos.iter().zip(values.iter()) {
+            output_one(ch_info.clone(), value.clone());
+        }
+
+        Ok(())
     }
 }

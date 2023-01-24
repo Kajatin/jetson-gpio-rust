@@ -1,4 +1,5 @@
 use anyhow::Result;
+use anyhow::anyhow;
 use std::{
     collections::HashMap,
     env,
@@ -6,6 +7,44 @@ use std::{
     io::Read,
     path::Path,
 };
+
+#[derive(Eq, Hash, PartialEq, Clone, Copy)]
+pub enum Mode {
+    BOARD,
+    BCM,
+    // TEGRA_SOC,
+    // CVM,
+}
+
+impl Mode {
+    pub fn from_str(s: &str) -> Result<Mode> {
+        match s {
+            "BOARD" => Ok(Mode::BOARD),
+            "BCM" => Ok(Mode::BCM),
+            // "TEGRA_SOC" => Ok(Mode::TEGRA_SOC),
+            // "CVM" => Ok(Mode::CVM),
+            _ => Err(anyhow!("Invalid mode: {}", s)),
+        }
+    }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            Mode::BOARD => "BOARD",
+            Mode::BCM => "BCM",
+            // Mode::TEGRA_SOC => "TEGRA_SOC",
+            // Mode::CVM => "CVM",
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Mode::BOARD => true,
+            Mode::BCM => true,
+            // Mode::TEGRA_SOC => true,
+            // Mode::CVM => true,
+        }
+    }
+}
 
 static CLARA_AGX_XAVIER: &str = "CLARA_AGX_XAVIER";
 static JETSON_NX: &str = "JETSON_NX";
@@ -891,7 +930,7 @@ fn get_jetson_info(model: &str) -> Result<JetsonInfo, anyhow::Error> {
 pub fn get_data() -> (
     String,
     JetsonInfo,
-    HashMap<String, HashMap<u32, ChannelInfo>>,
+    HashMap<Mode, HashMap<u32, ChannelInfo>>,
 ) {
     let model = get_model().unwrap();
 
@@ -1040,9 +1079,9 @@ pub fn get_data() -> (
         bcm_data.insert(channel_bcm.channel, channel_bcm);
     }
 
-    let mut channel_data: HashMap<String, HashMap<u32, ChannelInfo>> = HashMap::new();
-    channel_data.insert(String::from("BOARD"), board_data);
-    channel_data.insert(String::from("BCM"), bcm_data);
+    let mut channel_data: HashMap<Mode, HashMap<u32, ChannelInfo>> = HashMap::new();
+    channel_data.insert(Mode::BOARD, board_data);
+    channel_data.insert(Mode::BCM, bcm_data);
 
     (model, jetson_info, channel_data)
 }

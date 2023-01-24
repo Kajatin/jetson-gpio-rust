@@ -1,9 +1,10 @@
 [package]
-name = "jetson-gpio-rust"
+name = "jetson_gpio"
 version = "0.1.0"
 authors = ["Roland Kajatin roland.kajatin@gmail.com"]
 edition = "2021"
 description = "A Rust port of NVIDIA's Python library for controlling GPIO pins on select Jetson devices"
+#documentation = "https://docs.rs/jetson_gpio"
 repository = "https://github.com/Kajatin/jetson-gpio-rust"
 license = "MIT"
 keywords = ["gpio", "jetson", "nvidia"]
@@ -15,4 +16,3 @@ categories = ["embedded", "hardware-support"]
 
 [dependencies]
 anyhow = "1.0.68"
-once_cell = "1.17.0"
