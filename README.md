@@ -3,6 +3,8 @@
 A Rust port of NVIDIA's Python library for controlling GPIO pins on select Jetson devices.
 It is based on the [jetson-gpio](https://github.com/NVIDIA/jetson-gpio) Python library.
 
+Find the crate on [crates.io](https://crates.io/crates/jetson_gpio).
+
 ## Getting started
 
 The usage of this crate is very similar to the Python library. The main
