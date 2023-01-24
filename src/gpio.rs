@@ -365,7 +365,7 @@ impl GPIO {
     /// # Example
     ///
     /// ```rust
-    /// use jetson_gpio::{gpio::{GPIO, Direction}, gpio_pin_data::Mode};
+    /// use jetson_gpio::{GPIO, Direction, Mode};
     ///
     /// let mut gpio = GPIO::new();
     /// gpio.setmode(Mode::BOARD).unwrap();
@@ -499,7 +499,7 @@ impl GPIO {
     ///
     /// # Example
     /// ```rust
-    /// use jetson_gpio::{gpio::{GPIO, Direction, Level}, gpio_pin_data::Mode};
+    /// use jetson_gpio::{GPIO, Direction, Level, Mode};
     ///
     /// let mut gpio = GPIO::new();
     /// gpio.setmode(Mode::BOARD).unwrap();

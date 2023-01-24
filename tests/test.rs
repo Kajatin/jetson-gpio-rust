@@ -1,4 +1,4 @@
-use jetson_gpio::{gpio::{GPIO, Direction, Level}, gpio_pin_data::Mode};
+use jetson_gpio::{GPIO, Direction, Level, Mode};
 
 
 #[test]

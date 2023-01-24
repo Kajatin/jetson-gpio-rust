@@ -5,7 +5,7 @@
 //! library.
 //!
 //! ```rust
-//! use jetson_gpio::{gpio::{GPIO, Direction, Level}, gpio_pin_data::Mode};
+//! use jetson_gpio::{GPIO, Direction, Level, Mode};
 //!
 //! let mut gpio = GPIO::new();
 //! gpio.setmode(Mode::BOARD).unwrap();
@@ -37,5 +37,8 @@
 //! jetson_gpio = { version = "0.1.0" }
 //! ```
 
-pub mod gpio;
-pub mod gpio_pin_data;
+// reexport the gpio module
+mod gpio;
+mod gpio_pin_data;
+pub use gpio::*;
+pub use gpio_pin_data::*;
