@@ -2,7 +2,7 @@ use jetson_gpio::{GPIO, Direction, Level, Mode};
 
 
 #[test]
-fn test_flash_leds_pin_7() {
+fn test_flash_leds_pin_7_11() {
     let mut gpio = GPIO::new();
     gpio.setmode(Mode::BOARD).unwrap();
     gpio.setup(vec![7, 11], Direction::OUT, Some(Level::LOW)).unwrap();

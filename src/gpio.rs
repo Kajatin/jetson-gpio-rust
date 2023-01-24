@@ -12,35 +12,50 @@ use crate::gpio_pin_data::{get_data, ChannelInfo, JetsonInfo, Mode};
 
 static SYSFS_ROOT: &str = "/sys/class/gpio";
 
-// Pin numbering modes
-static BOARD: i32 = 10;
-static BCM: i32 = 11;
-static TEGRA_SOC: i32 = 1000;
-static CVM: i32 = 1001;
-
-// The constants and their offsets are implemented to prevent HIGH from being
-// used in place of other variables (ie. HIGH and RISING should not be
-// interchangeable)
-// Pull up/down options
-static _PUD_OFFSET: i32 = 20;
-static PUD_OFF: i32 = 0 + _PUD_OFFSET;
-static PUD_DOWN: i32 = 1 + _PUD_OFFSET;
-static PUD_UP: i32 = 2 + _PUD_OFFSET;
-
+/// Specifies the GPIO pin value in output mode.
+///
+/// * `LOW` - 0
+/// * `HIGH` - 1
+///
+/// # Example
+///
+/// When writing to a GPIO pin, you must specify the value. For example, to set
+/// GPIO pin 7 to HIGH and GPIO pin 11 to LOW:
+///
+/// ```rust
+/// use jetson_gpio::{GPIO, Level, Direction, Mode};
+///
+/// let mut gpio = GPIO::new();
+/// gpio.setmode(Mode::BOARD).unwrap();
+///
+/// gpio.setup(vec![7, 11], Direction::OUT, None).unwrap();
+/// gpio.output(vec![7, 11], vec![Level::HIGH, Level::LOW]).unwrap();
+/// ```
 #[derive(PartialEq, Clone)]
 pub enum Level {
     LOW = 0,
     HIGH = 1,
 }
 
-// Edge possibilities
-// These values (with _EDGE_OFFSET subtracted)
-static _EDGE_OFFSET: i32 = 30;
-static RISING: i32 = 1 + _EDGE_OFFSET;
-static FALLING: i32 = 2 + _EDGE_OFFSET;
-static BOTH: i32 = 3 + _EDGE_OFFSET;
-
-// GPIO directions. UNKNOWN constant is for gpios that are not yet setup
+/// Specifies the GPIO pin direction.
+///
+/// * `IN` - Input
+/// * `OUT` - Output
+/// * `HARD_PWM` - Hardware PWM output
+/// * `UNKNOWN` - Unknown direction for GPIOs that are not yet setup
+///
+/// # Example
+///
+/// When setting up a GPIO pin, you must specify the direction. For example, to
+/// set up GPIO pin 7 as an output:
+///
+/// ```rust
+/// use jetson_gpio::{GPIO, Direction};
+///
+/// let mut gpio = GPIO::new();
+///
+/// gpio.setup(vec![7], Direction::OUT, None).unwrap();
+/// ```
 #[derive(PartialEq, Clone)]
 pub enum Direction {
     UNKNOWN = -1,
@@ -164,9 +179,22 @@ fn output_one(ch_info: ChannelInfo, value: Level) {
     write_value(ch_info, value_str.to_string());
 }
 
+/// A public struct that holds state information about the GPIO pins.
+///
+/// Public fields:
+/// * `model` - The model of the Jetson board
+/// * `jetson_info` - A `JetsonInfo` struct that holds information about the Jetson board
+///
+/// # Example
+///
+/// ```rust
+/// use jetson_gpio::GPIO;
+///
+/// let gpio = GPIO::new();
+/// ```
 pub struct GPIO {
-    model: String,
-    jetson_info: JetsonInfo,
+    pub model: String,
+    pub jetson_info: JetsonInfo,
     channel_data_by_mode: HashMap<Mode, HashMap<u32, ChannelInfo>>,
 
     // # Dictionary objects used as lookup tables for pin to linux gpio mapping
@@ -179,6 +207,8 @@ pub struct GPIO {
 
 impl GPIO {
     /// Creates a new `GPIO` object.
+    ///
+    /// Calling this function will automatically populate the `model` and `jetson_info` fields.
     pub fn new() -> Self {
         let (model, jetson_info, channel_data_by_mode) = get_data();
 
@@ -207,10 +237,14 @@ impl GPIO {
     /// Sets the pin mumbering mode.
     ///
     /// Possible mode values are
-    /// * BOARD
-    /// * BCM
-    /// * TEGRA_SOC
-    /// * CVM
+    /// * `Mode::BOARD`
+    /// * `Mode::BCM`
+    /// * `Mode::TEGRA_SOC`
+    /// * `Mode::CVM`
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - The pin numbering mode to use
     pub fn setmode(&mut self, mode: Mode) -> Result<(), Error> {
         // check if a different mode has been set already
         if let Some(current_mode) = self.gpio_mode {
@@ -230,7 +264,7 @@ impl GPIO {
         Ok(())
     }
 
-    /// Returns the currently set pin numbering mode as a `Option<String>`.
+    /// Returns the currently set pin numbering mode as an `Option<String>`.
     pub fn getmode(&self) -> Option<String> {
         match self.gpio_mode {
             Some(mode) => Some(String::from(mode.to_str())),
@@ -359,7 +393,7 @@ impl GPIO {
     /// # Arguments
     ///
     /// * `channels` - A list of channels to setup.
-    /// * `direction` - IN or OUT
+    /// * `direction` - `Level::IN` or `Level::OUT`
     /// * `initial` - An optional initial level for an output channel.
     ///
     /// # Example
@@ -471,7 +505,7 @@ impl GPIO {
 
     /// Returns the current value of the specified channel.
     ///
-    /// Return either HIGH or LOW.
+    /// Return either `Level::HIGH` or `Level::LOW`.
     ///
     /// # Arguments
     ///

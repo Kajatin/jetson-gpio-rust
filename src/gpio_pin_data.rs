@@ -8,6 +8,24 @@ use std::{
     path::Path,
 };
 
+/// Specifies the pin numbering mode.
+///
+/// The pin numbering mode is used to determine the mapping between the pin numbers
+/// and the GPIO channels. The pin numbering mode can be one of the following:
+///
+/// * `BOARD` - The pin numbers are the physical pin numbers on the Jetson board.
+/// * `BCM` - The pin numbers are the Broadcom SOC channel numbers.
+/// * `TEGRA_SOC` - The pin numbers are the Tegra SOC channel numbers.
+/// * `CVM` - The pin numbers are the CVM channel numbers.
+///
+/// # Example
+///
+/// ```rust
+/// use jetson_gpio::{GPIO, Mode};
+///
+/// let mut gpio = GPIO::new();
+/// gpio.setmode(Mode::BOARD).unwrap();
+/// ```
 #[derive(Eq, Hash, PartialEq, Clone, Copy)]
 pub enum Mode {
     BOARD,
@@ -17,6 +35,23 @@ pub enum Mode {
 }
 
 impl Mode {
+    /// Converts a string to a `Mode` enum.
+    ///
+    /// Valid strings are:
+    ///
+    /// * `"BOARD"`
+    /// * `"BCM"`
+    /// * `"TEGRA_SOC"`
+    /// * `CVM`
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use jetson_gpio::{GPIO, Mode};
+    ///
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::from_str("BOARD").unwrap()).unwrap();
+    /// ```
     pub fn from_str(s: &str) -> Result<Mode> {
         match s {
             "BOARD" => Ok(Mode::BOARD),
@@ -27,6 +62,17 @@ impl Mode {
         }
     }
 
+    /// Converts a `Mode` enum to a string.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use jetson_gpio::{GPIO, Mode};
+    ///
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::BOARD).unwrap();
+    /// assert_eq!(gpio.getmode().unwrap().to_str(), "BOARD");
+    /// ```
     pub fn to_str(&self) -> &str {
         match self {
             Mode::BOARD => "BOARD",
@@ -36,12 +82,26 @@ impl Mode {
         }
     }
 
+    /// Checks if the `Mode` is valid.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use jetson_gpio::{GPIO, Mode};
+    ///
+    /// let mut gpio = GPIO::new();
+    /// assert_eq!(Mode::BOARD.is_valid(), true);
+    /// assert_eq!(Mode::BCM.is_valid(), true);
+    /// assert_eq!(Mode::TEGRA_SOC.is_valid(), false);
+    /// assert_eq!(Mode::CVM.is_valid(), false);
+    /// ```
     pub fn is_valid(&self) -> bool {
         match self {
             Mode::BOARD => true,
             Mode::BCM => true,
             // Mode::TEGRA_SOC => true,
             // Mode::CVM => true,
+            _ => false,
         }
     }
 }
@@ -96,11 +156,13 @@ struct PinDefinition {
 ///
 /// This information is automatically gathered during the initialization of the library.
 /// The fields are:
-/// - Channel number
-/// - GPIO chip sysfs directory
-/// - Linux GPIO pin number (within chip, not global)
-/// - Global Linux GPIO pin number
-/// - Global Linux exported GPIO name
+/// * `channel`: Channel number
+/// * `gpio_chip_dir`: GPIO chip sysfs directory
+/// * `gpio`: Linux GPIO pin number (within chip, not global)
+/// * `global_gpio`: Linux exported GPIO number (global)
+/// * `global_gpio_name`: Linux exported GPIO name
+/// * `pwm_chip_dir`: PWM chip sysfs directory
+/// * `pwm_id`: PWM ID within PWM chip
 #[derive(Debug, Clone)]
 pub struct ChannelInfo {
     pub channel: u32,
@@ -112,14 +174,24 @@ pub struct ChannelInfo {
     pub pwm_id: Option<u32>,
 }
 
+/// Contains information about the Jetson platform.
+///
+/// This information is automatically gathered during the initialization of the library.
+/// The fields are:
+/// * `p1_revision`: P1 revision number
+/// * `ram`: RAM size
+/// * `revision`: Board revision
+/// * `ttype`: Board type
+/// * `manufacturer`: Board manufacturer
+/// * `processor`: Processor type
 #[derive(Debug, Clone)]
 pub struct JetsonInfo {
-    p1_revision: u32,
-    ram: String,
-    revision: String,
-    ttype: String,
-    manufacturer: String,
-    processor: String,
+    pub p1_revision: u32,
+    pub ram: String,
+    pub revision: String,
+    pub ttype: String,
+    pub manufacturer: String,
+    pub processor: String,
 }
 
 fn read_file_to_string(path: &str) -> String {
@@ -187,7 +259,7 @@ fn warn_if_not_carrier_board(carrier_boards: &[&str]) {
     }
 }
 
-pub fn get_model() -> Result<String> {
+fn get_model() -> Result<String> {
     let compatible_path = "/proc/device-tree/compatible";
 
     let compats_jetson_orins = [
@@ -927,7 +999,7 @@ fn get_jetson_info(model: &str) -> Result<JetsonInfo, anyhow::Error> {
     anyhow::bail!("No info found for model {}", model)
 }
 
-pub fn get_data() -> (
+pub(crate) fn get_data() -> (
     String,
     JetsonInfo,
     HashMap<Mode, HashMap<u32, ChannelInfo>>,
