@@ -365,10 +365,11 @@ impl GPIO {
     /// # Example
     ///
     /// ```rust
-    /// use jetson_gpio::{Gpio, Direction};
+    /// use jetson_gpio::{gpio::{GPIO, Direction}, gpio_pin_data::Mode};
     ///
-    /// let mut gpio = Gpio::new().unwrap();
-    /// gpio.setup(7, Direction::OUT, None).unwrap();
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::BOARD).unwrap();
+    /// gpio.setup(vec![7], Direction::OUT, None).unwrap();
     /// ```
     pub fn setup(&mut self, channels: Vec<u32>, direction: Direction, initial: Option<Level>) -> Result<(), Error> {
         check_write_access()?;
@@ -442,7 +443,7 @@ impl GPIO {
     ///
     /// # Arguments
     ///
-    /// * `channel` - An optional list of channels to cleanup. If no channel is provided, all channels are cleaned.
+    /// * `channels` - An optional list of channels to cleanup. If no channel is provided, all channels are cleaned.
     pub fn cleanup(&mut self, channels: Option<Vec<u32>>) -> Result<(), Error> {
         // warn if no channel is setup
         if self.gpio_mode.is_none() {
@@ -498,11 +499,12 @@ impl GPIO {
     ///
     /// # Example
     /// ```rust
-    /// use jetson_gpio::{Gpio, Direction, Level};
+    /// use jetson_gpio::{gpio::{GPIO, Direction, Level}, gpio_pin_data::Mode};
     ///
-    /// let mut gpio = Gpio::new().unwrap();
-    /// gpio.setup(7, Direction::OUT).unwrap();
-    /// gpio.output(7, Level::HIGH).unwrap();
+    /// let mut gpio = GPIO::new();
+    /// gpio.setmode(Mode::BOARD).unwrap();
+    /// gpio.setup(vec![7], Direction::OUT, None).unwrap();
+    /// gpio.output(vec![7], vec![Level::HIGH]).unwrap();
     /// ```
     pub fn output(&self, channels: Vec<u32>, values: Vec<Level>) -> Result<(), Error> {
         let ch_infos = self.channels_to_infos(channels, true, false)?;
