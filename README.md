@@ -1,5 +1,20 @@
 # jetson-gpio-rust
 
+<p align="center">
+    <a href="https://crates.io/crates/jetson_gpio">
+        <img src="https://img.shields.io/crates/v/jetson_gpio" />
+    </a>
+    <a href="https://crates.io/crates/jetson_gpio">
+        <img src="https://img.shields.io/crates/d/jetson_gpio" />
+    </a>
+    <a href="https://choosealicense.com/licenses/mit/">
+        <img src="https://img.shields.io/crates/l/jetson_gpio" />
+    </a>
+    <a href="https://docs.rs/jetson_gpio/latest/jetson_gpio/">
+        <img src="https://img.shields.io/docsrs/jetson_gpio" />
+    </a>
+</p>
+
 A Rust port of NVIDIA's Python library for controlling GPIO pins on select Jetson devices.
 It is based on the [jetson-gpio](https://github.com/NVIDIA/jetson-gpio) Python library.
 
@@ -34,7 +49,7 @@ Start using this crate by adding the following to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-jetson_gpio = { version = "0.1.0" }
+jetson_gpio = { version = "0.1.1" }
 ```
 
 ## Pin numbering mode
