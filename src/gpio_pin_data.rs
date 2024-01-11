@@ -887,7 +887,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(216, 216)]),
             name: HashMap::from([(216, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 7,
             bcm: 4,
             cvm: String::from("GPIO9"),
@@ -898,7 +898,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(50, 50)]),
             name: HashMap::from([(50, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 11,
             bcm: 17,
             cvm: String::from("UART1_RTS"),
@@ -909,7 +909,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(79, 79)]),
             name: HashMap::from([(79, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 12,
             bcm: 18,
             cvm: String::from("I2S0_SCLK"),
@@ -920,7 +920,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(14, 14)]),
             name: HashMap::from([(14, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 13,
             bcm: 27,
             cvm: String::from("SPI1_SCK"),
@@ -931,7 +931,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(194, 194)]),
             name: HashMap::from([(194, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 15,
             bcm: 22,
             cvm: String::from("GPIO12"),
@@ -942,7 +942,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(232, 232)]),
             name: HashMap::from([(232, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 16,
             bcm: 23,
             cvm: String::from("SPI1_CS1"),
@@ -953,7 +953,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(15, 15)]),
             name: HashMap::from([(15, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 18,
             bcm: 24,
             cvm: String::from("SPI1_CS0"),
@@ -964,7 +964,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(16, 16)]),
             name: HashMap::from([(16, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 19,
             bcm: 10,
             cvm: String::from("SPI0_MOSI"),
@@ -975,7 +975,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(17, 17)]),
             name: HashMap::from([(17, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 21,
             bcm: 9,
             cvm: String::from("SPI0_MISO"),
@@ -986,7 +986,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(13, 13)]),
             name: HashMap::from([(13, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 22,
             bcm: 25,
             cvm: String::from("SPI1_MISO"),
@@ -997,7 +997,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(18, 18)]),
             name: HashMap::from([(18, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 23,
             bcm: 11,
             cvm: String::from("SPI0_SCK"),
@@ -1008,7 +1008,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(19, 19)]),
             name: HashMap::from([(19, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 24,
             bcm: 8,
             cvm: String::from("SPI0_CS0"),
@@ -1019,7 +1019,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(20, 20)]),
             name: HashMap::from([(20, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 26,
             bcm: 7,
             cvm: String::from("SPI0_CS1"),
@@ -1030,7 +1030,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(149, 149)]),
             name: HashMap::from([(149, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 29,
             bcm: 5,
             cvm: String::from("GPIO01"),
@@ -1041,7 +1041,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(200, 200)]),
             name: HashMap::from([(200, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 31,
             bcm: 6,
             cvm: String::from("GPIO11"),
@@ -1052,29 +1052,29 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(168, 168)]),
             name: HashMap::from([(168, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 32,
             bcm: 12,
             cvm: String::from("GPIO07"),
             tegra_soc: String::from("LCD_BL_PW"),
-            pwm_chip_sysfs: Some(String::from("c340000.pwm")),
+            pwm_chip_sysfs: Some(String::from("7000a000.pwm")),
             pwm_id: Some(0),
         },
         PinDefinition {
             gpio: HashMap::from([(38, 38)]),
             name: HashMap::from([(38, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 33,
             bcm: 13,
             cvm: String::from("GPIO13"),
             tegra_soc: String::from("GPIO_PE6"),
-            pwm_chip_sysfs: Some(String::from("3280000.pwm")),
+            pwm_chip_sysfs: Some(String::from("7000a000.pwm")),
             pwm_id: Some(2),
         },
         PinDefinition {
             gpio: HashMap::from([(76, 76)]),
             name: HashMap::from([(76, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 35,
             bcm: 19,
             cvm: String::from("I2S0_FS"),
@@ -1085,7 +1085,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(51, 51)]),
             name: HashMap::from([(51, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 36,
             bcm: 16,
             cvm: String::from("UART1_CTS"),
@@ -1096,7 +1096,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(12, 12)]),
             name: HashMap::from([(12, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 37,
             bcm: 26,
             cvm: String::from("SPI1_MOSI"),
@@ -1107,7 +1107,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(77, 77)]),
             name: HashMap::from([(77, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 38,
             bcm: 20,
             cvm: String::from("I2S0_DIN"),
@@ -1118,7 +1118,7 @@ fn get_pin_defs(model: &str) -> Result<Vec<PinDefinition>, anyhow::Error> {
         PinDefinition {
             gpio: HashMap::from([(78, 78)]),
             name: HashMap::from([(78, String::from(""))]),
-            chip_sysfs: String::from("tegra-gpio"),
+            chip_sysfs: String::from("6000d000.gpio"),
             board: 40,
             bcm: 21,
             cvm: String::from("I2S0_DOUT"),
